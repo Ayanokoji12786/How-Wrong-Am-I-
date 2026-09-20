@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
-import { createSession, currentUser, publicUser } from '../_auth'
-import { query } from '../_db'
+import { createSession, currentUser, publicUser } from '../_auth.js'
+import { query } from '../_db.js'
 
 const scrypt = promisify(scryptCallback), text = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : '', hash = async (password: string, salt: string) => Buffer.from(await scrypt(password, salt, 64) as ArrayBuffer).toString('hex')
 export default async function handler(req: VercelRequest, res: VercelResponse) {

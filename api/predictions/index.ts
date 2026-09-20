@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { randomUUID } from 'node:crypto'
-import { requireUser } from '../_auth'
-import { query } from '../_db'
+import { requireUser } from '../_auth.js'
+import { query } from '../_db.js'
 
 const text = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 const presentation = (row: Record<string, unknown>) => ({ id: row.id, question: row.question, confidence: row.confidence, predictedOutcome: row.predicted_outcome, deadline: row.deadline, category: row.category, reasoning: row.reasoning, visibility: row.visibility, status: row.status, lockedAt: row.locked_at, resolvedAt: row.resolved_at, actualOutcome: row.actual_outcome, resolutionSource: row.resolution_source })

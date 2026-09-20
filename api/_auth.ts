@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
-import { query } from './_db'
+import { query } from './_db.js'
 
 type UserRow = { id: string; email: string; username: string; display_name: string }
 const secret = () => process.env.AUTH_SECRET ?? ''
