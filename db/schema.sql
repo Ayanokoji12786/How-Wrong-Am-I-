@@ -1,3 +1,72 @@
-CREATE TABLE IF NOT EXISTS users (id UUID PRIMARY KEY, email TEXT UNIQUE NOT NULL, username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, privacy_mode TEXT NOT NULL DEFAULT 'private' CHECK (privacy_mode IN ('private','public')), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE TABLE IF NOT EXISTS sessions (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE TABLE IF NOT EXISTS predictions (id UUID PRIMARY KEY, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, question TEXT NOT NULL CHECK (char_length(question) BETWEEN 8 AND 500), confidence SMALLINT NOT NULL CHECK (confidence BETWEEN 50 AND 99), predicted_outcome BOOLEAN NOT NULL, deadline TIMESTAMPTZ NOT NULL, category TEXT NOT NULL, reasoning TEXT NOT NULL DEFAULT '', visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','public')), status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','void','disputed')), locked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ, actual_outcome BOOLEAN, resolution_source TEXT, void_reason TEXT); CREATE TABLE IF NOT EXISTS prediction_revisions (id UUID PRIMARY KEY, prediction_id UUID NOT NULL REFERENCES predictions(id) ON DELETE CASCADE, previous_confidence SMALLINT NOT NULL CHECK (previous_confidence BETWEEN 50 AND 99), next_confidence SMALLINT NOT NULL CHECK (next_confidence BETWEEN 50 AND 99), note TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE TABLE IF NOT EXISTS reflections (id UUID PRIMARY KEY, prediction_id UUID NOT NULL REFERENCES predictions(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, text TEXT NOT NULL, tag TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE INDEX IF NOT EXISTS predictions_owner_status_deadline_idx ON predictions(user_id,status,deadline); CREATE INDEX IF NOT EXISTS revisions_prediction_created_idx ON prediction_revisions(prediction_id,created_at); CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  password_salt TEXT NOT NULL,
+  privacy_mode TEXT NOT NULL DEFAULT 'private' CHECK (privacy_mode IN ('private','public')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS predictions (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  question TEXT NOT NULL CHECK (char_length(question) BETWEEN 8 AND 500),
+  confidence SMALLINT NOT NULL CHECK (confidence BETWEEN 50 AND 99),
+  predicted_outcome BOOLEAN NOT NULL,
+  deadline TIMESTAMPTZ NOT NULL,
+  category TEXT NOT NULL,
+  reasoning TEXT NOT NULL DEFAULT '',
+  resolution_criteria TEXT NOT NULL DEFAULT '',
+  visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','public')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','void','disputed')),
+  locked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  actual_outcome BOOLEAN,
+  resolution_source TEXT,
+  resolution_source_type TEXT,
+  resolution_url TEXT,
+  resolution_note TEXT,
+  void_reason TEXT,
+  dispute_reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS prediction_revisions (
+  id UUID PRIMARY KEY,
+  prediction_id UUID NOT NULL REFERENCES predictions(id) ON DELETE CASCADE,
+  previous_confidence SMALLINT NOT NULL CHECK (previous_confidence BETWEEN 50 AND 99),
+  next_confidence SMALLINT NOT NULL CHECK (next_confidence BETWEEN 50 AND 99),
+  note TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS reflections (
+  id UUID PRIMARY KEY,
+  prediction_id UUID NOT NULL REFERENCES predictions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  tag TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS predictions_owner_status_deadline_idx ON predictions(user_id,status,deadline);
+CREATE INDEX IF NOT EXISTS revisions_prediction_created_idx ON prediction_revisions(prediction_id,created_at);
+CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at);
 
 ALTER TABLE predictions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS resolution_criteria TEXT NOT NULL DEFAULT '';
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS resolution_source_type TEXT;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS resolution_url TEXT;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS resolution_note TEXT;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS void_reason TEXT;
+ALTER TABLE predictions ADD COLUMN IF NOT EXISTS dispute_reason TEXT;

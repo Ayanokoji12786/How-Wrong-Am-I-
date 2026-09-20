@@ -1,7 +1,14 @@
 import { createSeedPredictions } from '../data/seed'
-import type { Prediction, Revision } from './types'
+import type { Prediction, ResolutionSourceType, Revision } from './types'
 
 const storageKey = 'how-wrong-am-i-forecasts-v1'
+
+export type ResolutionInput = {
+  source: string
+  sourceType: ResolutionSourceType
+  sourceUrl?: string
+  note?: string
+}
 
 export const loadForecasts = (): Prediction[] => {
   try {
@@ -35,10 +42,25 @@ export const reviseForecast = (forecast: Prediction, nextConfidence: number, not
   return { ...forecast, confidence: nextConfidence, revisions: [...forecast.revisions, revision] }
 }
 
-export const resolveForecast = (forecast: Prediction, actualOutcome: boolean, source: string): Prediction => ({
+export const resolveForecast = (forecast: Prediction, actualOutcome: boolean, resolution: ResolutionInput): Prediction => ({
   ...forecast,
   status: 'resolved',
   actualOutcome,
-  resolutionSource: source || 'Personal verification',
+  resolutionSource: resolution.source || 'Personal observation',
+  resolutionSourceType: resolution.sourceType,
+  resolutionUrl: resolution.sourceUrl,
+  resolutionNote: resolution.note,
   resolvedAt: new Date().toISOString(),
+})
+
+export const voidForecast = (forecast: Prediction, reason: string): Prediction => ({
+  ...forecast,
+  status: 'void',
+  voidReason: reason || 'Forecast could not be evaluated.',
+})
+
+export const disputeForecast = (forecast: Prediction, reason: string): Prediction => ({
+  ...forecast,
+  status: 'disputed',
+  disputeReason: reason || 'Resolution is disputed.',
 })

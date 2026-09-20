@@ -43,6 +43,7 @@ export const createSeedPredictions = (): Prediction[] =>
       deadline: date(isOpen ? (index % 45) + 2 : -((index % 170) + 2)),
       category: categories[index % categories.length],
       reasoning: reasonings[index % reasonings.length],
+      resolutionCriteria: "YES if the stated event is clearly true by the listed deadline; otherwise NO.",
       visibility: index % 5 === 0 ? 'public' : 'private',
       status: resolved ? 'resolved' : 'open',
       createdAt: date(-190 + index),
