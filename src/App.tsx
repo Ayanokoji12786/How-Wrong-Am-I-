@@ -4,6 +4,7 @@ import { ForecastCard } from './components/ForecastCard'
 import { createForecast, loadForecasts, resetForecasts, resolveForecast, reviseForecast, saveForecasts } from './lib/forecast-store'
 import { averageBrier, brierForPrediction, calibrationBuckets, categoryPerformance, confidenceDistribution, expectedCalibrationError, friendlyScore, isCorrect, resolvedPredictions, sampleLabel } from './lib/statistics'
 import type { ForecastStatus, Prediction, Visibility } from './lib/types'
+import { createRemotePrediction, getPredictions, getSession } from './lib/remote'
 
 type View = 'dashboard' | 'journal' | 'calibration'
 type FormValues = { question: string; confidence: number; predictedOutcome: boolean; deadline: string; category: string; reasoning: string; visibility: Visibility }
@@ -71,7 +72,9 @@ function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<ForecastStatus | 'all'>('all')
   const [query, setQuery] = useState('')
-  useEffect(() => { saveForecasts(forecasts) }, [forecasts])
+  const [accountName, setAccountName] = useState<string | null>(null)
+  useEffect(() => { void getSession().then(async ({ user }) => { if (!user) return; const { predictions } = await getPredictions(); setAccountName(user.displayName); setForecasts(predictions); setLanding(false) }).catch(() => undefined) }, [])
+  useEffect(() => { if (!accountName) saveForecasts(forecasts) }, [forecasts, accountName])
   const resolved = useMemo(() => resolvedPredictions(forecasts), [forecasts])
   const buckets = useMemo(() => calibrationBuckets(forecasts), [forecasts])
   const brier = useMemo(() => averageBrier(forecasts), [forecasts])
@@ -81,7 +84,7 @@ function App() {
   const categories = useMemo(() => categoryPerformance(forecasts), [forecasts])
   const selected = forecasts.find((forecast) => forecast.id === selectedId) ?? null
   const update = (forecast: Prediction) => { setForecasts((items) => items.map((item) => item.id === forecast.id ? forecast : item)); setSelectedId(forecast.id) }
-  const add = (forecast: Prediction) => { setForecasts((items) => [forecast, ...items]); setNewForecast(false); setSelectedId(forecast.id); setLanding(false) }
+  const add = async (forecast: Prediction) => { const saved = accountName ? (await createRemotePrediction(forecast)).prediction : forecast; setForecasts((items) => [saved, ...items]); setNewForecast(false); setSelectedId(saved.id); setLanding(false) }
   const openForecasts = forecasts.filter((forecast) => forecast.status === 'open').sort((a, b) => a.deadline.localeCompare(b.deadline))
   const journal = forecasts.filter((forecast) => (filter === 'all' || forecast.status === filter) && forecast.question.toLowerCase().includes(query.toLowerCase()))
   const bestCategory = categories[0]

@@ -4,7 +4,7 @@ import { requireUser } from '../_auth.js'
 import { query } from '../_db.js'
 
 const text = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : ''
-const presentation = (row: Record<string, unknown>) => ({ id: row.id, question: row.question, confidence: row.confidence, predictedOutcome: row.predicted_outcome, deadline: row.deadline, category: row.category, reasoning: row.reasoning, visibility: row.visibility, status: row.status, lockedAt: row.locked_at, resolvedAt: row.resolved_at, actualOutcome: row.actual_outcome, resolutionSource: row.resolution_source })
+const presentation = (row: Record<string, unknown>) => ({ id: row.id, question: row.question, confidence: row.confidence, predictedOutcome: row.predicted_outcome, deadline: row.deadline, category: row.category, reasoning: row.reasoning, visibility: row.visibility, status: row.status, createdAt: row.created_at, lockedAt: row.locked_at, resolvedAt: row.resolved_at, actualOutcome: row.actual_outcome, resolutionSource: row.resolution_source, revisions: [] })
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await requireUser(req, res); if (!user) return
   if (req.method === 'GET') { const rows = await query<Record<string, unknown>>('SELECT * FROM predictions WHERE user_id=$1 ORDER BY locked_at DESC',[user.id]); return res.status(200).json({ predictions: rows.map(presentation) }) }
