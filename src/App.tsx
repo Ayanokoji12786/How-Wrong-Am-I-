@@ -5,7 +5,7 @@ import { ForecastCard } from './components/ForecastCard'
 import { createForecast, loadForecasts, resetForecasts, resolveForecast, reviseForecast, saveForecasts } from './lib/forecast-store'
 import { averageBrier, brierForPrediction, calibrationBuckets, categoryPerformance, confidenceDistribution, expectedCalibrationError, friendlyScore, isCorrect, resolvedPredictions, sampleLabel } from './lib/statistics'
 import type { ForecastStatus, Prediction, Visibility } from './lib/types'
-import { createRemotePrediction, getPredictions, getSession } from './lib/remote'
+import { createRemotePrediction, getPredictions, getSession, resolveRemotePrediction, reviseRemotePrediction } from './lib/remote'
 
 type View = 'dashboard' | 'journal' | 'calibration'
 type FormValues = { question: string; confidence: number; predictedOutcome: boolean; deadline: string; category: string; reasoning: string; visibility: Visibility }
@@ -85,7 +85,7 @@ function App() {
   const distribution = useMemo(() => confidenceDistribution(forecasts), [forecasts])
   const categories = useMemo(() => categoryPerformance(forecasts), [forecasts])
   const selected = forecasts.find((forecast) => forecast.id === selectedId) ?? null
-  const update = (forecast: Prediction) => { setForecasts((items) => items.map((item) => item.id === forecast.id ? forecast : item)); setSelectedId(forecast.id) }
+  const update = async (forecast: Prediction) => { const prior = forecasts.find((item) => item.id === forecast.id); if (accountName && prior) { if (forecast.status === 'resolved' && typeof forecast.actualOutcome === 'boolean') await resolveRemotePrediction(forecast.id, forecast.actualOutcome, forecast.resolutionSource ?? 'Personal verification'); else { const revision = forecast.revisions.at(-1); if (revision) await reviseRemotePrediction(forecast.id, revision.nextConfidence, revision.note) }; const { predictions } = await getPredictions(); setForecasts(predictions); } else setForecasts((items) => items.map((item) => item.id === forecast.id ? forecast : item)); setSelectedId(forecast.id) }
   const add = async (forecast: Prediction) => { const saved = accountName ? (await createRemotePrediction(forecast)).prediction : forecast; setForecasts((items) => [saved, ...items]); setNewForecast(false); setSelectedId(saved.id); setLanding(false) }
   const openForecasts = forecasts.filter((forecast) => forecast.status === 'open').sort((a, b) => a.deadline.localeCompare(b.deadline))
   const journal = forecasts.filter((forecast) => (filter === 'all' || forecast.status === filter) && forecast.question.toLowerCase().includes(query.toLowerCase()))
