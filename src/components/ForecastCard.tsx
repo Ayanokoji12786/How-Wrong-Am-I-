@@ -1,8 +1,10 @@
+import { motion } from 'motion/react'
+import { revealDelay } from '../lib/motion'
 import { brierForPrediction, isCorrect } from '../lib/statistics'
 import type { Prediction } from '../lib/types'
 import { ProbabilityRing } from './ProbabilityRing'
 
-type Props = { forecast: Prediction; onClick: () => void; condensed?: boolean }
+type Props = { forecast: Prediction; onClick: () => void; condensed?: boolean; index?: number }
 
 const formatDate = (date: string) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(date))
 
@@ -14,12 +16,18 @@ const dueLabel = (date: string) => {
   return `Due in ${days}d`
 }
 
-export function ForecastCard({ forecast, onClick, condensed = false }: Props) {
+export function ForecastCard({ forecast, onClick, condensed = false, index = 0 }: Props) {
   const brier = brierForPrediction(forecast)
   const resolved = forecast.status === 'resolved'
   const result = resolved && isCorrect(forecast)
   return (
-    <button className={`forecast-card ${resolved ? 'forecast-card--resolved' : ''} ${condensed ? 'forecast-card--condensed' : ''}`} onClick={onClick}>
+    <motion.button
+      className={`forecast-card ${resolved ? 'forecast-card--resolved' : ''} ${condensed ? 'forecast-card--condensed' : ''}`}
+      onClick={onClick}
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.985 }}
+      {...revealDelay(Math.min(index, 8) * 0.05)}
+    >
       <span className="forecast-card__meta">
         <b>{resolved ? 'RESOLVED' : forecast.status === 'void' ? 'VOID' : forecast.status === 'disputed' ? 'DISPUTED' : forecast.category.toUpperCase()}</b>
         <small>{resolved ? `Resolved ${formatDate(forecast.resolvedAt ?? forecast.deadline)}` : dueLabel(forecast.deadline)}</small>
@@ -51,6 +59,6 @@ export function ForecastCard({ forecast, onClick, condensed = false }: Props) {
         {resolved ? <span>Brier {brier?.toFixed(3)}</span> : <span>{forecast.resolutionCriteria ? 'Criteria set' : 'Criteria missing'}</span>}
         <i aria-hidden="true">›</i>
       </span>
-    </button>
+    </motion.button>
   )
 }

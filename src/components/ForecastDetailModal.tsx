@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import { disputeForecast, resolveForecast, reviseForecast, type ResolutionInput, voidForecast } from '../lib/forecast-store'
 import { brierForPrediction, isCorrect } from '../lib/statistics'
 import type { Prediction, ResolutionSourceType } from '../lib/types'
@@ -14,6 +15,7 @@ export type ForecastUpdate =
 const formatDate = (date: string) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(date))
 
 function BeliefHistory({ forecast }: { forecast: Prediction }) {
+  const reduce = useReducedMotion()
   const points = useMemo(() => [{ value: forecast.revisions[0]?.previousConfidence ?? forecast.confidence, label: forecast.lockedAt }, ...forecast.revisions.map((revision) => ({ value: revision.nextConfidence, label: revision.createdAt }))], [forecast])
   const width = 430
   const height = 132
@@ -22,8 +24,18 @@ function BeliefHistory({ forecast }: { forecast: Prediction }) {
   const path = points.map((point, index) => `${index ? 'L' : 'M'} ${scaleX(index)} ${scaleY(point.value)}`).join(' ')
   return <section className="belief-history"><div className="detail-section-heading"><div><span className="eyebrow">BELIEF HISTORY</span><h3>How your confidence moved</h3></div><b>{points.at(-1)?.value}% final</b></div><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Confidence history">
     {[50, 70, 90].map((value) => <g key={value}><line className="belief-grid" x1="24" x2={width - 24} y1={scaleY(value)} y2={scaleY(value)} /><text x="2" y={scaleY(value) + 3}>{value}%</text></g>)}
-    <path className="belief-path" d={path} />
-    {points.map((point, index) => <circle key={`${point.label}-${index}`} className="belief-dot" cx={scaleX(index)} cy={scaleY(point.value)} r="4.5" />)}
+    <motion.path className="belief-path" d={path} initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} />
+    {points.map((point, index) => <motion.circle
+      key={`${point.label}-${index}`}
+      className="belief-dot"
+      cx={scaleX(index)}
+      cy={scaleY(point.value)}
+      r="4.5"
+      initial={reduce ? false : { opacity: 0, scale: 0 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: 0.35 + index * 0.08, type: 'spring', stiffness: 260, damping: 16 }}
+      style={{ transformOrigin: `${scaleX(index)}px ${scaleY(point.value)}px` }}
+    />)}
   </svg><div className="belief-labels"><span>Initial <b>{points[0]?.value}%</b></span>{forecast.revisions.slice(-2).map((revision) => <span key={revision.id}>{formatDate(revision.createdAt)} <b>{revision.nextConfidence}%</b></span>)}</div></section>
 }
 

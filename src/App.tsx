@@ -1,5 +1,7 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { AuthModal } from './components/AuthModal'
 import { CalibrationChart } from './components/CalibrationChart'
 import { CalibrationTrend } from './components/CalibrationTrend'
@@ -11,11 +13,14 @@ import { ProbabilityRing } from './components/ProbabilityRing'
 import { TiltCard } from './components/TiltCard'
 import { WebGLBoundary } from './three/WebGLBoundary'
 import { loadForecasts, resetForecasts, saveForecasts } from './lib/forecast-store'
-
-const CalibrationScene3D = lazy(() => import('./three/CalibrationScene3D').then((module) => ({ default: module.CalibrationScene3D })))
+import { reveal, revealDelay } from './lib/motion'
 import { averageBrier, calibrationBuckets, categoryConfidenceMatrix, categoryPerformance, confidenceDistribution, diagnoseCalibration, expectedCalibrationError, friendlyScore, horizonPerformance, revisionValue, rollingCalibrationTrend, resolvedPredictions, sampleLabel } from './lib/statistics'
 import type { ForecastStatus, Prediction } from './lib/types'
 import { createRemotePrediction, disputeRemotePrediction, getPredictions, getSession, resolveRemotePrediction, reviseRemotePrediction, voidRemotePrediction } from './lib/remote'
+
+gsap.registerPlugin(ScrollTrigger)
+
+const CalibrationScene3D = lazy(() => import('./three/CalibrationScene3D').then((module) => ({ default: module.CalibrationScene3D })))
 
 type View = 'dashboard' | 'journal' | 'calibration'
 type JournalFilter = ForecastStatus | 'all' | 'overdue'
@@ -33,16 +38,16 @@ function Icon({ name }: { name: View }) {
   return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>
 }
 
-function Metric({ label, value, detail, accent = false }: { label: string; value: string; detail: string; accent?: boolean }) {
-  return <section className={`metric ${accent ? 'metric--accent' : ''}`}><span>{label}</span><strong>{value}</strong><small>{detail}</small></section>
+function Metric({ label, value, detail, accent = false, index = 0 }: { label: string; value: string; detail: string; accent?: boolean; index?: number }) {
+  return <motion.section className={`metric ${accent ? 'metric--accent' : ''}`} {...revealDelay(index * 0.07)}><span>{label}</span><strong>{value}</strong><small>{detail}</small></motion.section>
 }
 
-function AttentionForecast({ forecast, onOpen }: { forecast: Prediction; onOpen: (mode: DetailMode) => void }) {
-  return <article className={`attention-forecast ${dayOffset(forecast.deadline) < 0 ? 'is-overdue' : ''}`}>
+function AttentionForecast({ forecast, onOpen, index = 0 }: { forecast: Prediction; onOpen: (mode: DetailMode) => void; index?: number }) {
+  return <motion.article className={`attention-forecast ${dayOffset(forecast.deadline) < 0 ? 'is-overdue' : ''}`} {...revealDelay(index * 0.08)}>
     <ProbabilityRing confidence={forecast.confidence} outcome={forecast.predictedOutcome} size="small" />
     <div><span>{forecast.category.toUpperCase()} · {dayOffset(forecast.deadline) < 0 ? `${Math.abs(dayOffset(forecast.deadline))}D OVERDUE` : dayOffset(forecast.deadline) === 0 ? 'DUE TODAY' : 'DUE SOON'}</span><h3>{forecast.question}</h3><p>{forecast.resolutionCriteria || 'Set resolution criteria before resolving this forecast.'}</p></div>
     <div className="attention-actions"><button className="secondary-button" onClick={() => onOpen('revise')}>Update belief</button><button className="primary-button" onClick={() => onOpen('resolve')}>Resolve</button></div>
-  </article>
+  </motion.article>
 }
 
 function App() {
@@ -59,6 +64,43 @@ function App() {
   const [accountName, setAccountName] = useState<string | null>(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [error, setError] = useState('')
+  const heroRef = useRef<HTMLElement>(null)
+  const heroCtxRef = useRef<ReturnType<typeof gsap.context> | null>(null)
+
+  const leaveLanding = () => {
+    heroCtxRef.current?.revert()
+    heroCtxRef.current = null
+    setLanding(false)
+  }
+
+  useEffect(() => {
+    if (!landing || !heroRef.current) return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced) return
+    const ctx = gsap.context(() => {
+      gsap.set('.hero-copy', { willChange: 'opacity, transform' })
+      gsap.timeline({
+        scrollTrigger: {
+          trigger: heroRef.current,
+          start: 'top top',
+          end: '+=65%',
+          scrub: 0.6,
+          pin: true,
+          pinSpacing: true,
+          invalidateOnRefresh: true,
+        },
+      })
+        .to('.hero-copy', { opacity: 0, y: -50, ease: 'none' }, 0)
+        .to('.hero-chart', { opacity: 0, ease: 'none' }, 0.1)
+    }, heroRef)
+    heroCtxRef.current = ctx
+    const refreshes = [setTimeout(() => ScrollTrigger.refresh(), 500), setTimeout(() => ScrollTrigger.refresh(), 1500)]
+    return () => {
+      refreshes.forEach(clearTimeout)
+      ctx.revert()
+      heroCtxRef.current = null
+    }
+  }, [landing])
 
   useEffect(() => {
     void getSession().then(async ({ user }) => {
@@ -66,7 +108,7 @@ function App() {
       const { predictions } = await getPredictions()
       setAccountName(user.displayName)
       setForecasts(predictions)
-      setLanding(false)
+      leaveLanding()
     }).catch(() => undefined)
   }, [])
 
@@ -124,7 +166,7 @@ function App() {
       const saved = accountName ? (await createRemotePrediction(forecast)).prediction : forecast
       setForecasts((items) => [saved, ...items])
       setNewForecast(false)
-      setLanding(false)
+      leaveLanding()
       openForecast(saved.id)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create the forecast.')
@@ -153,22 +195,22 @@ function App() {
     const { predictions } = await getPredictions()
     setAccountName(user.displayName)
     setForecasts(predictions)
-    setLanding(false)
+    leaveLanding()
     setAuthOpen(false)
   }
 
   const runCommand = (action: CommandAction) => {
     setCommandOpen(false)
     if (action === 'create') { setNewForecast(true); return }
-    if (action === 'calibration') { setView('calibration'); setLanding(false); return }
-    if (action === 'journal') { setView('journal'); setLanding(false); return }
-    if (action === 'overdue') { setFilter('overdue'); setView('journal'); setLanding(false); return }
+    if (action === 'calibration') { setView('calibration'); leaveLanding(); return }
+    if (action === 'journal') { setView('journal'); leaveLanding(); return }
+    if (action === 'overdue') { setFilter('overdue'); setView('journal'); leaveLanding(); return }
     const target = attention[0]
-    if (target) { setLanding(false); openForecast(target.id, 'resolve') }
-    else { setView('journal'); setFilter('open'); setLanding(false) }
+    if (target) { leaveLanding(); openForecast(target.id, 'resolve') }
+    else { setView('journal'); setFilter('open'); leaveLanding() }
   }
 
-  if (landing) return <><main className="landing"><nav className="landing-nav"><span className="brand"><i /> HOW WRONG AM I?</span><div><button className="text-button" onClick={() => setAuthOpen(true)}>Create account</button><button className="text-button" onClick={() => setLanding(false)}>Explore demo</button><button className="nav-cta" onClick={() => { setLanding(false); setNewForecast(true) }}>Make a forecast</button></div></nav><section className="hero"><motion.div className="hero-copy" initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}><p className="eyebrow">A PERSONAL CALIBRATION JOURNAL</p><h1>Confidence is easy.<br /><em>Calibration</em> is measurable.</h1><p>Make predictions, define how they resolve, and discover whether your certainty meets reality.</p><div className="hero-actions"><button className="primary-button" onClick={() => { setLanding(false); setNewForecast(true) }}>Test your calibration <span>→</span></button><button className="secondary-button" onClick={() => setLanding(false)}>See the evidence</button></div><small>Built for curiosity, not certainty theater.</small></motion.div><TiltCard className="hero-chart"><div className="chart-heading"><span>DEMO CALIBRATION CURVE</span><b>{resolved.length} resolved forecasts</b></div><WebGLBoundary fallback={<CalibrationChart buckets={buckets} />}><Suspense fallback={<CalibrationChart buckets={buckets} />}><CalibrationScene3D buckets={buckets} /></Suspense></WebGLBoundary></TiltCard></section><section className="landing-loop">{[['01', 'Forecast'], ['02', 'Define evidence'], ['03', 'Wait for reality'], ['04', 'Learn']].flatMap(([number, label], index) => [
+  if (landing) return <><main className="landing"><nav className="landing-nav"><span className="brand"><i /> HOW WRONG AM I?</span><div><button className="text-button" onClick={() => setAuthOpen(true)}>Create account</button><button className="text-button" onClick={() => leaveLanding()}>Explore demo</button><button className="nav-cta" onClick={() => { leaveLanding(); setNewForecast(true) }}>Make a forecast</button></div></nav><section className="hero" ref={heroRef}><div className="hero-copy"><p className="eyebrow">A PERSONAL CALIBRATION JOURNAL</p><h1>Confidence is easy.<br /><em>Calibration</em> is measurable.</h1><p>Make predictions, define how they resolve, and discover whether your certainty meets reality.</p><div className="hero-actions"><button className="primary-button" onClick={() => { leaveLanding(); setNewForecast(true) }}>Test your calibration <span>→</span></button><button className="secondary-button" onClick={() => leaveLanding()}>See the evidence</button></div><small>Built for curiosity, not certainty theater.</small></div><TiltCard className="hero-chart"><div className="chart-heading"><span>DEMO CALIBRATION CURVE</span><b>{resolved.length} resolved forecasts</b></div><WebGLBoundary fallback={<CalibrationChart buckets={buckets} />}><Suspense fallback={<CalibrationChart buckets={buckets} />}><CalibrationScene3D buckets={buckets} /></Suspense></WebGLBoundary></TiltCard></section><section className="landing-loop">{[['01', 'Forecast'], ['02', 'Define evidence'], ['03', 'Wait for reality'], ['04', 'Learn']].flatMap(([number, label], index) => [
               ...(index > 0 ? [<i key={`arrow-${number}`}>→</i>] : []),
               <motion.span key={number} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.6 }} transition={{ duration: 0.5, delay: index * 0.08 }}>{number} <b>{label}</b></motion.span>,
             ])}</section><section className="landing-demo"><motion.div initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.4 }} transition={{ duration: 0.6 }}><p className="eyebrow">NOT A QUIZ. A MIRROR.</p><h2>A 72% forecast can be wrong—and still be well judged.</h2></motion.div><motion.p initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.4 }} transition={{ duration: 0.6, delay: 0.1 }}>Correctness is one outcome. Calibration is the pattern you create over time. The only way to know is to keep a record.</motion.p></section></main>{authOpen && <AuthModal onClose={() => setAuthOpen(false)} onAuthenticated={completeAuth} />}</>
@@ -178,17 +220,17 @@ function App() {
     <section className="content"><header className="app-header"><div><span className="eyebrow">{accountName ? 'PERSONAL FORECASTER' : 'DEMO FORECASTER'}</span><h1>{view === 'dashboard' ? 'Your forecasting dashboard' : view === 'journal' ? 'Forecast journal' : 'What reality says'}</h1></div><button className="primary-button header-create" onClick={() => setNewForecast(true)}>+ New forecast</button></header>
       {error && <div className="app-error" role="alert">{error}<button onClick={() => setError('')}>×</button></div>}
 
-      {view === 'dashboard' && <><section className="forecast-signal"><div><span className="eyebrow">YOUR FORECASTING SIGNAL</span><div className="signal-score">{score ?? '—'}<small>calibration</small></div></div><div className="signal-copy">{diagnosis ? <><h2>You tend to be {diagnosis.direction === 'overconfident' ? 'slightly overconfident' : 'slightly underconfident'} in {diagnosis.bucket.label}% forecasts.</h2><p>You predicted {(diagnosis.bucket.averageProbability * 100).toFixed(0)}%; reality occurred {(diagnosis.bucket.observedRate * 100).toFixed(0)}% of the time.</p><div><b>{diagnosis.direction === 'overconfident' ? '↘' : '↗'} {Math.abs(diagnosis.difference * 100).toFixed(1)}pp {diagnosis.direction}</b>{trendImprovement !== null && <span>{trendImprovement >= 0 ? '↑' : '↓'} {Math.abs(trendImprovement).toFixed(0)} points across this history</span>}</div></> : <><h2>Reality needs a few more forecasts before it can describe your signal.</h2><p>Lock clear forecasts and resolve them against your original criteria.</p></>}</div><button className="secondary-button" onClick={() => setView('calibration')}>Explore why →</button></section>
+      {view === 'dashboard' && <><motion.section className="forecast-signal" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}><div><span className="eyebrow">YOUR FORECASTING SIGNAL</span><div className="signal-score">{score ?? '—'}<small>calibration</small></div></div><div className="signal-copy">{diagnosis ? <><h2>You tend to be {diagnosis.direction === 'overconfident' ? 'slightly overconfident' : 'slightly underconfident'} in {diagnosis.bucket.label}% forecasts.</h2><p>You predicted {(diagnosis.bucket.averageProbability * 100).toFixed(0)}%; reality occurred {(diagnosis.bucket.observedRate * 100).toFixed(0)}% of the time.</p><div><b>{diagnosis.direction === 'overconfident' ? '↘' : '↗'} {Math.abs(diagnosis.difference * 100).toFixed(1)}pp {diagnosis.direction}</b>{trendImprovement !== null && <span>{trendImprovement >= 0 ? '↑' : '↓'} {Math.abs(trendImprovement).toFixed(0)} points across this history</span>}</div></> : <><h2>Reality needs a few more forecasts before it can describe your signal.</h2><p>Lock clear forecasts and resolve them against your original criteria.</p></>}</div><button className="secondary-button" onClick={() => setView('calibration')}>Explore why →</button></motion.section>
 
-      <section className="attention-section"><div className="section-title"><div><span className="eyebrow">NEED YOUR ATTENTION</span><h2>{attention.length ? `${attention.length} forecast${attention.length === 1 ? '' : 's'} ready for a reality check` : 'Nothing needs a reality check today'}</h2></div><button className="text-button" onClick={() => { setFilter('open'); setView('journal') }}>View journal →</button></div>{attention.length ? attention.map((forecast) => <AttentionForecast key={forecast.id} forecast={forecast} onOpen={(mode) => openForecast(forecast.id, mode)} />) : <div className="attention-empty"><b>Reality has not caught up yet.</b><span>When an open forecast reaches its deadline, it will appear here.</span></div>}</section>
+      <section className="attention-section"><div className="section-title"><div><span className="eyebrow">NEED YOUR ATTENTION</span><h2>{attention.length ? `${attention.length} forecast${attention.length === 1 ? '' : 's'} ready for a reality check` : 'Nothing needs a reality check today'}</h2></div><button className="text-button" onClick={() => { setFilter('open'); setView('journal') }}>View journal →</button></div>{attention.length ? attention.map((forecast, index) => <AttentionForecast key={forecast.id} forecast={forecast} index={index} onOpen={(mode) => openForecast(forecast.id, mode)} />) : <div className="attention-empty"><b>Reality has not caught up yet.</b><span>When an open forecast reaches its deadline, it will appear here.</span></div>}</section>
 
-      <section className="metrics-strip"><Metric label="CALIBRATION" value={score === null ? '—' : `${score}`} detail={sampleLabel(resolved.length)} accent /><Metric label="BRIER" value={brier === null ? '—' : brier.toFixed(3)} detail="Lower is better" /><Metric label="RESOLVED" value={resolved.length.toString()} detail="Evidence collected" /><Metric label="ERROR" value={ece === null ? '—' : `${(ece * 100).toFixed(1)}%`} detail="Probability vs reality" /></section>
-      <section className="dashboard-grid"><section className="panel calibration-panel"><div className="panel-heading"><div><span className="eyebrow">CONFIDENCE VS. REALITY</span><h2>Are your probabilities honest?</h2></div><button className="text-button" onClick={() => setView('calibration')}>View analysis →</button></div><CalibrationChart buckets={buckets} compact /></section><section className="panel queue-panel"><div className="panel-heading"><div><span className="eyebrow">FORECAST QUEUE</span><h2>What is coming due</h2></div></div><dl className="queue-summary"><div><dt>Overdue</dt><dd>{overdue.length}</dd></div><div><dt>Today</dt><dd>{today.length}</dd></div><div><dt>This week</dt><dd>{thisWeek.length}</dd></div><div><dt>Later</dt><dd>{Math.max(0, openForecasts.length - overdue.length - today.length - thisWeek.length)}</dd></div></dl></section></section>
-      <section className="dashboard-grid bottom-grid"><section className="panel trend-panel"><div className="panel-heading"><div><span className="eyebrow">CALIBRATION OVER TIME</span><h2>Are you getting better?</h2></div></div><CalibrationTrend points={trend} /></section><section className="panel insight-panel"><div className="panel-heading"><div><span className="eyebrow">WHAT THE DATA CAN SUPPORT</span><h2>Measured observations</h2></div></div><div className="insight"><i>◈</i><p>{diagnosis ? <>Your largest current difference is in <b>{diagnosis.bucket.label}% confidence</b> forecasts. Keep the sample size ({diagnosis.bucket.count}) in view.</> : <>Keep resolving forecasts. The first meaningful pattern needs more than a handful of outcomes.</>}</p></div><div className="insight"><i>↗</i><p>{revisionStats.revisedCount ? <>Forecasts you revised have a Brier score of <b>{revisionStats.revised?.toFixed(3) ?? '—'}</b> across {revisionStats.revisedCount} outcomes.</> : <>When you update a forecast, the belief history will show whether those revisions help.</>}</p></div></section></section></>}
+      <section className="metrics-strip"><Metric label="CALIBRATION" value={score === null ? '—' : `${score}`} detail={sampleLabel(resolved.length)} accent index={0} /><Metric label="BRIER" value={brier === null ? '—' : brier.toFixed(3)} detail="Lower is better" index={1} /><Metric label="RESOLVED" value={resolved.length.toString()} detail="Evidence collected" index={2} /><Metric label="ERROR" value={ece === null ? '—' : `${(ece * 100).toFixed(1)}%`} detail="Probability vs reality" index={3} /></section>
+      <section className="dashboard-grid"><motion.section className="panel calibration-panel" {...revealDelay(0)}><div className="panel-heading"><div><span className="eyebrow">CONFIDENCE VS. REALITY</span><h2>Are your probabilities honest?</h2></div><button className="text-button" onClick={() => setView('calibration')}>View analysis →</button></div><CalibrationChart buckets={buckets} compact /></motion.section><motion.section className="panel queue-panel" {...revealDelay(0.12)}><div className="panel-heading"><div><span className="eyebrow">FORECAST QUEUE</span><h2>What is coming due</h2></div></div><dl className="queue-summary">{[['Overdue', overdue.length], ['Today', today.length], ['This week', thisWeek.length], ['Later', Math.max(0, openForecasts.length - overdue.length - today.length - thisWeek.length)]].map(([label, value], index) => <motion.div key={label} initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: 0.2 + index * 0.06 }}><dt>{label}</dt><dd>{value}</dd></motion.div>)}</dl></motion.section></section>
+      <section className="dashboard-grid bottom-grid"><motion.section className="panel trend-panel" {...revealDelay(0)}><div className="panel-heading"><div><span className="eyebrow">CALIBRATION OVER TIME</span><h2>Are you getting better?</h2></div></div><CalibrationTrend points={trend} /></motion.section><motion.section className="panel insight-panel" {...revealDelay(0.12)}><div className="panel-heading"><div><span className="eyebrow">WHAT THE DATA CAN SUPPORT</span><h2>Measured observations</h2></div></div><div className="insight"><i>◈</i><p>{diagnosis ? <>Your largest current difference is in <b>{diagnosis.bucket.label}% confidence</b> forecasts. Keep the sample size ({diagnosis.bucket.count}) in view.</> : <>Keep resolving forecasts. The first meaningful pattern needs more than a handful of outcomes.</>}</p></div><div className="insight"><i>↗</i><p>{revisionStats.revisedCount ? <>Forecasts you revised have a Brier score of <b>{revisionStats.revised?.toFixed(3) ?? '—'}</b> across {revisionStats.revisedCount} outcomes.</> : <>When you update a forecast, the belief history will show whether those revisions help.</>}</p></div></motion.section></section></>}
 
-      {view === 'journal' && <><section className="journal-tools"><div className="filter-group">{(['all', 'open', 'overdue', 'resolved', 'void', 'disputed'] as JournalFilter[]).map((item) => <button key={item} className={filter === item ? 'selected' : ''} onClick={() => setFilter(item)}>{item === 'all' ? 'All' : item[0].toUpperCase() + item.slice(1)}</button>)}</div><label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search forecasts" /></label></section><section className="journal-filters"><label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{categoryOptions.map((category) => <option key={category}>{category}</option>)}</select></label><label>Confidence<select value={confidenceFilter} onChange={(event) => setConfidenceFilter(event.target.value)}><option value="all">All confidence</option><option value="high">85–99%</option><option value="medium">70–84%</option></select></label></section><p className="journal-caption">{journal.length} forecasts · Each is a timestamped belief about the future.</p><section className="forecast-list">{journal.map((forecast) => <ForecastCard key={forecast.id} forecast={forecast} onClick={() => openForecast(forecast.id)} />)}{!journal.length && <div className="empty-state"><b>{confidenceFilter === 'high' ? 'No 85%+ forecasts yet.' : 'No forecasts match this view.'}</b><span>Extreme confidence is where calibration becomes most revealing.</span><button className="primary-button" onClick={() => setNewForecast(true)}>Make a forecast</button></div>}</section></>}
+      {view === 'journal' && <><motion.section className="journal-tools" {...reveal}><div className="filter-group">{(['all', 'open', 'overdue', 'resolved', 'void', 'disputed'] as JournalFilter[]).map((item) => <button key={item} className={filter === item ? 'selected' : ''} onClick={() => setFilter(item)}>{item === 'all' ? 'All' : item[0].toUpperCase() + item.slice(1)}</button>)}</div><label className="search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search forecasts" /></label></motion.section><motion.section className="journal-filters" {...revealDelay(0.08)}><label>Category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{categoryOptions.map((category) => <option key={category}>{category}</option>)}</select></label><label>Confidence<select value={confidenceFilter} onChange={(event) => setConfidenceFilter(event.target.value)}><option value="all">All confidence</option><option value="high">85–99%</option><option value="medium">70–84%</option></select></label></motion.section><p className="journal-caption">{journal.length} forecasts · Each is a timestamped belief about the future.</p><section className="forecast-list">{journal.map((forecast, index) => <ForecastCard key={forecast.id} forecast={forecast} index={index} onClick={() => openForecast(forecast.id)} />)}{!journal.length && <div className="empty-state"><b>{confidenceFilter === 'high' ? 'No 85%+ forecasts yet.' : 'No forecasts match this view.'}</b><span>Extreme confidence is where calibration becomes most revealing.</span><button className="primary-button" onClick={() => setNewForecast(true)}>Make a forecast</button></div>}</section></>}
 
-      {view === 'calibration' && <><section className="calibration-hero"><div><p className="eyebrow">{resolved.length} RESOLVED FORECASTS</p><h2>Where are you most wrong?</h2><p>Hover a probability bubble to see its sample, observed rate, and uncertainty range. Bigger bubbles represent more evidence.</p></div><Metric label="YOUR SCORE" value={`${score ?? '—'}`} detail={sampleLabel(resolved.length)} accent /></section><section className="panel full-chart"><WebGLBoundary fallback={<CalibrationChart buckets={buckets} />}><Suspense fallback={<CalibrationChart buckets={buckets} />}><CalibrationScene3D buckets={buckets} diagnosis={diagnosis} tall /></Suspense></WebGLBoundary></section><section className="diagnosis-card">{diagnosis ? <><span className="eyebrow">YOUR BIGGEST BLIND SPOT</span><h2>{diagnosis.bucket.label}% forecasts</h2><div><span>You predicted <b>{(diagnosis.bucket.averageProbability * 100).toFixed(0)}%</b></span><span>Reality occurred <b>{(diagnosis.bucket.observedRate * 100).toFixed(0)}%</b></span><strong>{Math.abs(diagnosis.difference * 100).toFixed(0)}pp {diagnosis.direction}</strong></div></> : <p>Resolve forecasts to unlock a personal calibration diagnosis.</p>}</section><section className="analysis-grid"><section className="panel bucket-panel"><div className="panel-heading"><div><span className="eyebrow">TIME-HORIZON CALIBRATION</span><h2>How far ahead do you see?</h2></div></div><div className="horizon-table">{horizons.map((horizon) => <div key={horizon.label}><span>{horizon.label}</span><b>{horizon.brier === null ? '—' : `Brier ${horizon.brier.toFixed(3)}`}</b><small>n = {horizon.count}</small></div>)}</div></section><section className="panel histogram-panel"><div className="panel-heading"><div><span className="eyebrow">SHARPNESS</span><h2>Where you place your bets</h2></div></div><div className="histogram">{distribution.map((item) => <div key={item.label}><span style={{ height: `${Math.max(12, item.count / Math.max(...distribution.map((bar) => bar.count), 1) * 140)}px` }} /><b>{item.count}</b><small>{item.label}</small></div>)}</div><p className="muted">Sharp forecasts are useful only when their confidence earns its accuracy.</p></section></section><section className="panel category-matrix"><div className="panel-heading"><div><span className="eyebrow">CATEGORY × CONFIDENCE</span><h2>Where do your predictions get risky?</h2></div></div><div className="matrix-scroll"><table><thead><tr><th>Category</th><th>50–69%</th><th>70–84%</th><th>85–99%</th></tr></thead><tbody>{categories.map((category) => <tr key={category.category}><th>{category.category}</th>{['50–69%', '70–84%', '85–99%'].map((band) => { const cell = matrix.find((item) => item.category === category.category && item.band === band); const difference = cell?.averageProbability != null && cell.observedRate != null ? (cell.averageProbability - cell.observedRate) * 100 : null; return <td key={band} title={cell ? `${cell.count} forecasts` : ''}><i className={difference === null ? '' : difference > 0 ? 'over' : 'under'}>{cell?.count ?? 0}</i>{difference !== null && <small>{difference > 0 ? '+' : ''}{difference.toFixed(0)}pp</small>}</td> })}</tr>)}</tbody></table></div></section></>}
+      {view === 'calibration' && <><motion.section className="calibration-hero" {...reveal}><div><p className="eyebrow">{resolved.length} RESOLVED FORECASTS</p><h2>Where are you most wrong?</h2><p>Hover a probability bubble to see its sample, observed rate, and uncertainty range. Bigger bubbles represent more evidence.</p></div><Metric label="YOUR SCORE" value={`${score ?? '—'}`} detail={sampleLabel(resolved.length)} accent /></motion.section><motion.section className="panel full-chart" {...revealDelay(0.1)}><WebGLBoundary fallback={<CalibrationChart buckets={buckets} />}><Suspense fallback={<CalibrationChart buckets={buckets} />}><CalibrationScene3D buckets={buckets} diagnosis={diagnosis} tall /></Suspense></WebGLBoundary></motion.section><motion.section className="diagnosis-card" {...reveal}>{diagnosis ? <><span className="eyebrow">YOUR BIGGEST BLIND SPOT</span><h2>{diagnosis.bucket.label}% forecasts</h2><div><span>You predicted <b>{(diagnosis.bucket.averageProbability * 100).toFixed(0)}%</b></span><span>Reality occurred <b>{(diagnosis.bucket.observedRate * 100).toFixed(0)}%</b></span><strong>{Math.abs(diagnosis.difference * 100).toFixed(0)}pp {diagnosis.direction}</strong></div></> : <p>Resolve forecasts to unlock a personal calibration diagnosis.</p>}</motion.section><section className="analysis-grid"><motion.section className="panel bucket-panel" {...revealDelay(0)}><div className="panel-heading"><div><span className="eyebrow">TIME-HORIZON CALIBRATION</span><h2>How far ahead do you see?</h2></div></div><div className="horizon-table">{horizons.map((horizon, index) => <motion.div key={horizon.label} initial={{ opacity: 0, x: -12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: index * 0.07 }}><span>{horizon.label}</span><b>{horizon.brier === null ? '—' : `Brier ${horizon.brier.toFixed(3)}`}</b><small>n = {horizon.count}</small></motion.div>)}</div></motion.section><motion.section className="panel histogram-panel" {...revealDelay(0.12)}><div className="panel-heading"><div><span className="eyebrow">SHARPNESS</span><h2>Where you place your bets</h2></div></div><div className="histogram">{distribution.map((item, index) => { const barHeight = Math.max(12, item.count / Math.max(...distribution.map((bar) => bar.count), 1) * 140); return <div key={item.label}><motion.span initial={{ height: 0 }} whileInView={{ height: barHeight }} viewport={{ once: true }} transition={{ duration: 0.6, delay: index * 0.06, ease: 'easeOut' }} /><b>{item.count}</b><small>{item.label}</small></div> })}</div><p className="muted">Sharp forecasts are useful only when their confidence earns its accuracy.</p></motion.section></section><motion.section className="panel category-matrix" {...reveal}><div className="panel-heading"><div><span className="eyebrow">CATEGORY × CONFIDENCE</span><h2>Where do your predictions get risky?</h2></div></div><div className="matrix-scroll"><table><thead><tr><th>Category</th><th>50–69%</th><th>70–84%</th><th>85–99%</th></tr></thead><tbody>{categories.map((category, rowIndex) => <motion.tr key={category.category} initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: rowIndex * 0.06 }}><th>{category.category}</th>{['50–69%', '70–84%', '85–99%'].map((band) => { const cell = matrix.find((item) => item.category === category.category && item.band === band); const difference = cell?.averageProbability != null && cell.observedRate != null ? (cell.averageProbability - cell.observedRate) * 100 : null; return <td key={band} title={cell ? `${cell.count} forecasts` : ''}><i className={difference === null ? '' : difference > 0 ? 'over' : 'under'}>{cell?.count ?? 0}</i>{difference !== null && <small>{difference > 0 ? '+' : ''}{difference.toFixed(0)}pp</small>}</td> })}</motion.tr>)}</tbody></table></div></motion.section></>}
     </section>
     {newForecast && <CreateForecastModal onClose={() => setNewForecast(false)} onCreate={create} />}
     {selectedForecast && selected && <ForecastDetailModal forecast={selectedForecast} initialMode={selected.mode} onClose={() => setSelected(null)} onUpdate={update} />}

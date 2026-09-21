@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import type { CalibrationBucket } from '../lib/types'
 
 type Props = { buckets: CalibrationBucket[]; compact?: boolean }
@@ -10,6 +11,7 @@ const uncertainty = (bucket: CalibrationBucket) => {
 
 export function CalibrationChart({ buckets, compact = false }: Props) {
   const [activeLabel, setActiveLabel] = useState<string | null>(null)
+  const reduce = useReducedMotion()
   const active = buckets.filter((bucket) => bucket.count > 0)
   const focused = active.find((bucket) => bucket.label === activeLabel) ?? null
   const width = 520
@@ -27,13 +29,19 @@ export function CalibrationChart({ buckets, compact = false }: Props) {
           {!compact && <text className="axis-label" x={5} y={scaleY(point) + 4}>{Math.round(point * 100)}%</text>}
         </g>)}
         <line className="diagonal" x1={scaleX(0)} y1={scaleY(0)} x2={scaleX(100)} y2={scaleY(1)} />
-        {path && <path className="observed-line" d={path} />}
-        {active.map((bucket) => {
+        {path && <motion.path
+          className="observed-line"
+          d={path}
+          initial={reduce ? false : { pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+        />}
+        {active.map((bucket, index) => {
           const x = scaleX(bucket.averageProbability * 100)
           const y = scaleY(bucket.observedRate)
           const range = uncertainty(bucket)
           const radius = (compact ? 3.5 : 4.5) + Math.min(5.5, Math.sqrt(bucket.count) * .55)
-          return <g
+          return <motion.g
             className="chart-point"
             key={bucket.label}
             tabIndex={0}
@@ -43,13 +51,17 @@ export function CalibrationChart({ buckets, compact = false }: Props) {
             onMouseLeave={() => setActiveLabel(null)}
             onFocus={() => setActiveLabel(bucket.label)}
             onBlur={() => setActiveLabel(null)}
+            initial={reduce ? false : { opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5 + index * 0.05, type: 'spring', stiffness: 260, damping: 16 }}
+            style={{ transformOrigin: `${x}px ${y}px` }}
           >
             {!compact && <line className="uncertainty-band" x1={x} x2={x} y1={scaleY(Math.min(1, bucket.observedRate + range))} y2={scaleY(Math.max(0, bucket.observedRate - range))} />}
             {!compact && <line className="uncertainty-cap" x1={x - 4} x2={x + 4} y1={scaleY(Math.min(1, bucket.observedRate + range))} y2={scaleY(Math.min(1, bucket.observedRate + range))} />}
             {!compact && <line className="uncertainty-cap" x1={x - 4} x2={x + 4} y1={scaleY(Math.max(0, bucket.observedRate - range))} y2={scaleY(Math.max(0, bucket.observedRate - range))} />}
             <circle className="chart-dot-shadow" cx={x} cy={y} r={radius + 3} />
             <circle className="chart-dot" cx={x} cy={y} r={radius} />
-          </g>
+          </motion.g>
         })}
         {!compact && [0, 25, 50, 75, 100].map((point) => <text key={point} className="axis-label" x={scaleX(point)} y={height - 8} textAnchor="middle">{point}%</text>)}
       </svg>
