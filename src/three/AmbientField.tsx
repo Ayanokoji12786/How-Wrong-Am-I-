@@ -67,7 +67,7 @@ function DriftingField() {
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" count={near.length / 3} array={near} itemSize={3} />
         </bufferGeometry>
-        <pointsMaterial size={0.05} color="#8fe3ff" transparent opacity={0.75} sizeAttenuation depthWrite={false} />
+        <pointsMaterial size={0.05} color="#e4e9ec" transparent opacity={0.75} sizeAttenuation depthWrite={false} />
       </points>
       <points rotation={[0, Math.PI / 6, 0]}>
         <bufferGeometry>
@@ -98,7 +98,7 @@ export function AmbientField() {
       <Canvas dpr={[1, 1.5]} camera={{ position: [0, 0, 9], fov: 50 }} gl={{ antialias: false, alpha: true }}>
         <fog attach="fog" args={['#07111b', 6, 15]} />
         <ambientLight intensity={0.4} />
-        <pointLight position={[3, 4, 4]} intensity={0.6} color="#8fe3ff" />
+        <pointLight position={[3, 4, 4]} intensity={0.6} color="#e4e9ec" />
         <DiveRig rich={rich} />
         <DriftingField />
         {rich && (

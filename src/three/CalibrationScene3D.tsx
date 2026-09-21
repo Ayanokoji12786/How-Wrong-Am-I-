@@ -14,7 +14,7 @@ type Props = {
 }
 
 const OVER = '#ffc35b'
-const UNDER = '#35d8f4'
+const UNDER = '#e4e9ec'
 const GOOD = '#54dd9b'
 
 function bucketColor(diff: number) {
@@ -119,7 +119,7 @@ export function CalibrationScene3D({ buckets, diagnosis, tall = false }: Props) 
       <Canvas dpr={[1, 1.75]} camera={{ position: [0, 1.3, 6.4], fov: 42 }} gl={{ antialias: true, alpha: true }}>
         <ambientLight intensity={0.55} />
         <pointLight position={[4, 5, 5]} intensity={1.1} color="#bfe9ff" />
-        <pointLight position={[-4, -3, 3]} intensity={0.5} color="#35d8f4" />
+        <pointLight position={[-4, -3, 3]} intensity={0.5} color="#e4e9ec" />
         <Suspense fallback={null}>
           <Grid position={[0, -2.7, 0]} args={[10, 10]} cellColor="#173247" sectionColor="#1f4a63" fadeDistance={16} fadeStrength={1.4} infiniteGrid />
           <DiagonalReference />
