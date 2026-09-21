@@ -2,8 +2,10 @@ import { Suspense, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Grid, Line, OrbitControls, Html } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
-import { Vector3, type Mesh } from 'three'
+import { Group, Vector3, type Mesh } from 'three'
 import type { CalibrationBucket, CalibrationDiagnosis } from '../lib/types'
+
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
 
 type Props = {
   buckets: CalibrationBucket[]
@@ -27,23 +29,45 @@ function toPosition(bucket: CalibrationBucket): [number, number, number] {
   return [x, y, z]
 }
 
-function BucketNode({ bucket, highlighted }: { bucket: CalibrationBucket; highlighted: boolean }) {
+function BucketNode({ bucket, highlighted, index, reduced }: { bucket: CalibrationBucket; highlighted: boolean; index: number; reduced: boolean }) {
   const [hovered, setHovered] = useState(false)
   const meshRef = useRef<Mesh>(null)
+  const groupRef = useRef<Group>(null)
   const diff = bucket.averageProbability - bucket.observedRate
   const color = bucketColor(diff)
-  const position = useMemo(() => toPosition(bucket), [bucket])
+  const targetPosition = useMemo(() => toPosition(bucket), [bucket])
+  const scatterFrom = useMemo(() => {
+    if (reduced) return targetPosition
+    return [
+      targetPosition[0] + (Math.random() - 0.5) * 9,
+      targetPosition[1] + (Math.random() - 0.5) * 9,
+      targetPosition[2] - 5 - Math.random() * 3,
+    ] as [number, number, number]
+  }, [targetPosition, reduced])
+  const delay = useMemo(() => index * 0.09 + Math.random() * 0.12, [index])
+  const mountTime = useRef<number | null>(null)
   const radius = 0.14 + Math.min(0.26, Math.sqrt(bucket.count) * 0.045)
   const active = hovered || highlighted
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
+    const group = groupRef.current
+    if (!group) return
+    if (mountTime.current === null) mountTime.current = state.clock.elapsedTime
+    const elapsed = state.clock.elapsedTime - mountTime.current
+    const progress = Math.max(0, Math.min(1, (elapsed - delay) / 1.3))
+    const eased = easeOutCubic(progress)
+    group.position.set(
+      scatterFrom[0] + (targetPosition[0] - scatterFrom[0]) * eased,
+      scatterFrom[1] + (targetPosition[1] - scatterFrom[1]) * eased,
+      scatterFrom[2] + (targetPosition[2] - scatterFrom[2]) * eased,
+    )
     if (!meshRef.current) return
-    const target = active ? 1.35 : 1
+    const target = (active ? 1.35 : 1) * (0.25 + 0.75 * eased)
     meshRef.current.scale.lerp(new Vector3(target, target, target), Math.min(1, delta * 6))
   })
 
   return (
-    <group position={position}>
+    <group ref={groupRef} position={scatterFrom}>
       <mesh
         ref={meshRef}
         onPointerOver={(event) => { event.stopPropagation(); setHovered(true) }}
@@ -99,8 +123,8 @@ export function CalibrationScene3D({ buckets, diagnosis, tall = false }: Props) 
         <Suspense fallback={null}>
           <Grid position={[0, -2.7, 0]} args={[10, 10]} cellColor="#173247" sectionColor="#1f4a63" fadeDistance={16} fadeStrength={1.4} infiniteGrid />
           <DiagonalReference />
-          {active.map((bucket) => (
-            <BucketNode key={bucket.label} bucket={bucket} highlighted={diagnosis?.bucket.label === bucket.label} />
+          {active.map((bucket, index) => (
+            <BucketNode key={bucket.label} bucket={bucket} index={index} reduced={reduced} highlighted={diagnosis?.bucket.label === bucket.label} />
           ))}
         </Suspense>
         <OrbitControls

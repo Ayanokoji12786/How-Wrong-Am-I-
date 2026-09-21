@@ -31,6 +31,7 @@ function useScrollFraction() {
 function DriftingField() {
   const groupRef = useRef<Group>(null)
   const pointer = useRef({ x: 0, y: 0 })
+  const mountTime = useRef<number | null>(null)
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -47,9 +48,12 @@ function DriftingField() {
   useFrame((state, delta) => {
     const group = groupRef.current
     if (!group) return
+    if (mountTime.current === null) mountTime.current = state.clock.elapsedTime
+    const introProgress = Math.min(1, (state.clock.elapsedTime - mountTime.current) / 1.7)
+    const introEase = 1 - Math.pow(1 - introProgress, 3)
     group.rotation.y += delta * 0.03
     const breathe = 1 + Math.sin(state.clock.elapsedTime * 0.4) * 0.04
-    group.scale.setScalar(breathe)
+    group.scale.setScalar(breathe * introEase)
     const targetX = pointer.current.y * -0.2 + scrollState.fraction * 0.55
     const targetY = pointer.current.x * 0.3
     group.rotation.x += (targetX - group.rotation.x) * 0.04
