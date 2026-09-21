@@ -48,8 +48,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .text-button { background: none; border: 0; color: var(--blue); font-size: 12px; padding: 6px; }
 .text-button:hover { color: var(--blue-deep); text-decoration: underline; text-underline-offset: 3px; }
 
+/* Ambient 3D backdrop, mounted once at the app root */
+.ambient-field { inset: 0; pointer-events: none; position: fixed; z-index: 0; }
+.ambient-field canvas { display: block; height: 100% !important; width: 100% !important; }
+
+/* Interactive 3D calibration scene */
+.scene3d { border-radius: 18px; height: 300px; overflow: hidden; position: relative; }
+.scene3d canvas { cursor: grab; touch-action: none; }
+.scene3d canvas:active { cursor: grabbing; }
+.scene3d--tall { height: 440px; }
+.scene3d-empty { align-items: center; color: var(--muted); display: flex; flex-direction: column; font-size: 12px; gap: 4px; inset: 0; justify-content: center; pointer-events: none; position: absolute; text-align: center; z-index: 1; }
+.scene3d-empty b { color: var(--ink); font-size: 14px; }
+.scene3d-legend { color: var(--muted); display: flex; flex-wrap: wrap; font: 10px 'DM Mono', ui-monospace, monospace; gap: 14px; letter-spacing: .04em; margin: 8px 2px 0; }
+.scene3d-legend span { align-items: center; display: flex; gap: 6px; }
+.scene3d-legend i { border-radius: 50%; display: inline-block; height: 7px; width: 7px; }
+.scene3d-legend i.good { background: var(--green); }
+.scene3d-legend i.over { background: var(--orange); }
+.scene3d-legend i.under { background: var(--blue); }
+.scene3d-tooltip { background: rgba(10, 20, 30, .95); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 30px rgba(0, 0, 0, .35); color: var(--ink); font-size: 11px; padding: 10px 12px; white-space: nowrap; }
+.scene3d-tooltip b { display: block; font-size: 12px; margin-bottom: 2px; }
+.scene3d-tooltip span { color: var(--muted); display: block; font-size: 10px; margin-bottom: 6px; }
+.scene3d-tooltip dl { display: grid; gap: 3px; margin: 0; }
+.scene3d-tooltip dl div { display: flex; font-size: 10px; gap: 12px; justify-content: space-between; }
+.scene3d-tooltip dt { color: var(--muted); }
+
 /* Landing */
-.landing { background: #fff; min-height: 100vh; overflow: hidden; }
+.landing { background: #fff; min-height: 100vh; overflow: hidden; position: relative; z-index: 1; }
 .landing-nav { align-items: center; background: rgba(255, 255, 255, .8); border-bottom: 1px solid rgba(210, 210, 215, .7); display: flex; height: 54px; justify-content: space-between; padding: 0 max(24px, calc((100vw - 1060px) / 2)); position: relative; z-index: 2; }
 .landing-nav > div { display: flex; gap: 10px; }
 .landing-nav .text-button { color: var(--ink); }
@@ -76,7 +100,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .landing-demo > p { color: var(--ink-soft); font-size: 17px; line-height: 1.55; margin: 0; }
 
 /* Workspace shell */
-.app-shell { background: var(--paper); min-height: 100vh; }
+.app-shell { background: var(--paper); min-height: 100vh; position: relative; z-index: 1; }
 .sidebar { align-items: center; backdrop-filter: saturate(180%) blur(20px); background: rgba(255, 255, 255, .82); border-bottom: 1px solid rgba(210, 210, 215, .75); display: flex; height: 58px; padding: 0 max(24px, calc((100vw - 1160px) / 2)); position: sticky; top: 0; width: 100%; z-index: 6; }
 .sidebar-brand { flex: 0 0 175px; line-height: 1; margin: 0; padding: 0; }
 .sidebar nav { display: flex; gap: 5px; }

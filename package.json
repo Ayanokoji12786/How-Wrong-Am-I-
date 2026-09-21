@@ -12,9 +12,15 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@react-three/drei": "^9.114.3",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/postprocessing": "^2.16.3",
     "@vitejs/plugin-react": "4.3.4",
+    "motion": "^11.15.0",
+    "postprocessing": "^6.36.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "three": "^0.169.0",
     "typescript": "5.7.3",
     "vite": "5.4.19"
   },
